@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PMS5003 Air Quality</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #edf3f8;
+  color: #18324a;
+}
+header {
+  background: #163b65;
+  color: white;
+  text-align: center;
+  padding: 30px 12px;
+}
+header h1 { margin: 0 0 8px; }
+header p { margin: 0; color: #d9e8f7; }
+main {
+  max-width: 900px;
+  margin: 28px auto;
+  padding: 0 16px;
+}
+#status {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #536a80;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+.card {
+  background: white;
+  border-radius: 18px;
+  padding: 25px 12px;
+  text-align: center;
+  box-shadow: 0 4px 18px #18324a12;
+}
+.label { color: #5c7083; font-size: 18px; }
+.value {
+  font-size: 48px;
+  font-weight: bold;
+  color: #087f8c;
+  margin: 15px 0;
+}
+.unit { color: #708397; }
+.info {
+  background: white;
+  border-radius: 12px;
+  margin-top: 20px;
+  padding: 18px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+footer {
+  text-align: center;
+  color: #718096;
+  padding: 24px;
+  font-size: 13px;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Air Quality Dashboard</h1>
+  <p>ESP32 + PMS5003</p>
+</header>
+
+<main>
+  <div id="status">กำลังเชื่อมต่อฐานข้อมูล...</div>
+
+  <section class="cards">
+    <div class="card">
+      <div class="label">PM1.0</div>
+      <div class="value" id="pm1">--</div>
+      <div class="unit">µg/m³</div>
+    </div>
+    <div class="card">
+      <div class="label">PM2.5</div>
+      <div class="value" id="pm25">--</div>
+      <div class="unit">µg/m³</div>
+    </div>
+    <div class="card">
+      <div class="label">PM10</div>
+      <div class="value" id="pm10">--</div>
+      <div class="unit">µg/m³</div>
+    </div>
+  </section>
+
+  <div class="info">
+    <b>สถานะเซนเซอร์:</b> <span id="sensor">กำลังตรวจสอบ</span><br>
+    <b>เวลาที่อ่านได้:</b> <span id="updated">--</span><br>
+    <small>แสดงค่าที่บันทึกล่าสุดจาก PMS5003</small>
+  </div>
+</main>
+
+<footer>ESP32 Cloud Air Quality Monitor</footer>
+
+<script>
+// ใส่ URL Firebase Realtime Database จริงตรงนี้
+const DATABASE_URL =
+  "https://YOUR-DATABASE-URL";
+
+async function updateDashboard() {
+  const status = document.getElementById("status");
+
+  try {
+    const url =
+      DATABASE_URL.replace(/\/+$/, "") +
+      "/pms5003/latest.json";
+
+    const response = await fetch(url, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const data = await response.json();
+
+    if (!data || data.pm25 === undefined ||
+        data.pm1 === undefined || data.pm10 === undefined) {
+      throw new Error("ยังไม่มีข้อมูลจากเซนเซอร์");
+    }
+
+    document.getElementById("pm1").textContent = data.pm1;
+    document.getElementById("pm25").textContent = data.pm25;
+    document.getElementById("pm10").textContent = data.pm10;
+
+    const age = Date.now() - Number(data.updated_at || 0);
+
+    // โค้ด ESP32 ตัวอย่างใช้ millis() ซึ่งไม่ใช่เวลาโลก
+    // จึงใช้การรับข้อมูลล่าสุดในฐานข้อมูลเป็นหลัก
+    document.getElementById("sensor").textContent =
+      "มีข้อมูลในฐานข้อมูล";
+
+    document.getElementById("updated").textContent =
+      new Date().toLocaleString("th-TH");
+
+    status.textContent = "เชื่อมต่อฐานข้อมูลสำเร็จ";
+  } catch (error) {
+    status.textContent =
+      "อ่านข้อมูลไม่ได้: " + error.message;
+    document.getElementById("sensor").textContent =
+      "ตรวจสอบการเชื่อมต่อ";
+  }
+}
+
+updateDashboard();
+setInterval(updateDashboard, 2000);
+</script>
+</body>
+</html>

@@ -4,41 +4,464 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PMS5003 Dashboard</title>
+  <meta name="theme-color" content="#08111f">
+  <title>PMS5003 Air Quality Dashboard</title>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      padding: 30px 16px;
-      background: #0f172a;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
+      color: #f1f5f9;
+      background: #08111f;
+      font-family: Arial, "Noto Sans Thai", sans-serif;
     }
+
+    header {
+      padding: 22px 5%;
+      background: #0d192a;
+      border-bottom: 1px solid #26364a;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 25px; margin-bottom: 8px; }
+    h3 { font-size: 17px; margin-top: 0; }
+
+    .muted { color: #94a3b8; font-size: 13px; line-height: 1.7; }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid #334155;
+      border-radius: 25px;
+      padding: 10px 14px;
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      background: #64748b;
+      border-radius: 50%;
+    }
+
+    .dot.ok { background: #34d399; }
+    .dot.bad { background: #fb7185; }
+
+    main { padding: 28px 5%; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
     .card {
-      max-width: 500px;
-      margin: 30px auto;
-      padding: 24px;
-      background: #1e293b;
-      border-radius: 18px;
+      background: #111e30;
+      border: 1px solid #29394d;
+      border-radius: 17px;
+      padding: 22px;
+      min-width: 0;
     }
-    .value {
-      font-size: 48px;
-      color: #4ade80;
+
+    .metric {
+      font-size: clamp(34px, 5vw, 48px);
       font-weight: bold;
+      margin: 18px 0 6px;
+      overflow-wrap: anywhere;
+    }
+
+    .blue { color: #60a5fa; }
+    .orange { color: #fb923c; }
+    .green { color: #34d399; }
+
+    .lower {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .chartBox { height: 300px; position: relative; }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 13px 0;
+      border-bottom: 1px solid #29394d;
+      font-size: 13px;
+    }
+
+    .row span:first-child { color: #94a3b8; }
+    .row span:last-child { text-align: right; overflow-wrap: anywhere; }
+
+    .banner {
+      padding: 16px;
+      border-radius: 12px;
+      background: #17283b;
+      border: 1px solid #334155;
+      margin: 16px 0;
+      line-height: 1.7;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 12px;
+      color: white;
+      background: #1d4ed8;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover { background: #2563eb; }
+
+    footer {
+      padding: 26px 16px;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    @media(max-width: 720px) {
+      .grid, .lower { grid-template-columns: 1fr; }
+      main { padding-top: 22px; }
     }
   </style>
 </head>
-<body>
-  <h1>PMS5003 Dashboard</h1>
-  <p>ระบบตรวจวัดฝุ่น PM2.5</p>
 
-  <div class="card">
-    <h2>สถานะเว็บไซต์</h2>
-    <div class="value" style="font-size:28px">
-      ONLINE
+<body>
+<header>
+  <div class="container head">
+    <div>
+      <h1>🌫️ PMS5003 Dashboard</h1>
+      <div class="muted">ESP32 · Firebase Realtime Database</div>
     </div>
-    <p>หน้าเว็บทำงานแล้ว</p>
-    <p>ยังไม่ได้เชื่อมต่อข้อมูลเซนเซอร์</p>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="connection">กำลังเชื่อมต่อ...</span>
+    </div>
   </div>
+</header>
+
+<main class="container">
+  <h2>ระบบตรวจวัดคุณภาพอากาศ</h2>
+  <div class="muted">ข้อมูลฝุ่นละอองจากเซนเซอร์ PMS5003 แบบเรียลไทม์</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="muted">PM1.0</div>
+      <div class="metric blue" id="pm1">--</div>
+      <div class="muted">µg/m³</div>
+    </div>
+
+    <div class="card">
+      <div class="muted">PM2.5</div>
+      <div class="metric orange" id="pm25">--</div>
+      <div class="muted">µg/m³</div>
+    </div>
+
+    <div class="card">
+      <div class="muted">PM10</div>
+      <div class="metric green" id="pm10">--</div>
+      <div class="muted">µg/m³</div>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="card">
+      <h3>📈 กราฟค่าฝุ่นย้อนหลัง</h3>
+      <div class="chartBox">
+        <canvas id="dustChart"></canvas>
+      </div>
+      <div class="muted">แสดงข้อมูลล่าสุดสูงสุด 20 รายการ</div>
+    </section>
+
+    <section class="card">
+      <h3>📡 สถานะระบบ</h3>
+      <div class="banner" id="sensorStatus">
+        กำลังรอข้อมูลจาก ESP32
+      </div>
+
+      <div class="row">
+        <span>PM2.5 ล่าสุด</span>
+        <span id="pm25Info">--</span>
+      </div>
+
+      <div class="row">
+        <span>เวลาที่บันทึก</span>
+        <span id="updated">--</span>
+      </div>
+
+      <div class="row">
+        <span>ฐานข้อมูล</span>
+        <span>Firebase</span>
+      </div>
+
+      <button id="retry">ตรวจสอบการเชื่อมต่ออีกครั้ง</button>
+    </section>
+  </div>
+
+  <div class="banner" id="message">
+    เว็บไซต์กำลังเริ่มต้นระบบ...
+  </div>
+</main>
+
+<footer>
+  PMS5003 Air Quality Monitoring System<br>
+  ESP32 + PMS5003 + Firebase Realtime Database
+</footer>
+
+<script>
+  // ใส่ apiKey และ appId จาก Firebase Web App ของคุณ
+  const firebaseConfig = {
+    apiKey: "AIzaSyDwNM43XDhs5L9AAJSh3noF1Ji_JthONkk",
+    authDomain: "pm25-162c0.firebaseapp.com",
+    databaseURL:
+      "https://pm25-162c0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "pm25-162c0",
+    appId: "1:929879975513:web:edd8b594479f5dc9dc3348"
+  };
+
+  const $ = id => document.getElementById(id);
+
+  let db;
+  let chart;
+  let latestDataTime = 0;
+
+  function status(ok, text) {
+    $("dot").className = "dot " + (ok ? "ok" : "bad");
+    $("connection").textContent = text;
+  }
+
+  function numberText(value) {
+    const n = Number(value);
+    return value !== null && value !== undefined &&
+      Number.isFinite(n) ? n.toFixed(1) : "--";
+  }
+
+  function thaiTime(timestamp) {
+    const n = Number(timestamp);
+    if (!Number.isFinite(n) || n <= 0) return "--";
+
+    return new Date(n).toLocaleString("th-TH", {
+      dateStyle: "short",
+      timeStyle: "medium",
+      timeZone: "Asia/Bangkok"
+    });
+  }
+
+  function makeChart() {
+    chart = new Chart($("dustChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "PM1.0",
+            data: [],
+            borderColor: "#60a5fa",
+            borderWidth: 2,
+            tension: 0.3
+          },
+          {
+            label: "PM2.5",
+            data: [],
+            borderColor: "#fb923c",
+            borderWidth: 2,
+            tension: 0.3
+          },
+          {
+            label: "PM10",
+            data: [],
+            borderColor: "#34d399",
+            borderWidth: 2,
+            tension: 0.3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: "index" },
+        plugins: {
+          legend: {
+            labels: { color: "#e2e8f0" }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#94a3b8", maxTicksLimit: 6 },
+            grid: { color: "#29394d" }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: "#94a3b8" },
+            grid: { color: "#29394d" }
+          }
+        }
+      }
+    });
+  }
+
+  function showLatest(data) {
+    if (!data) {
+      $("message").textContent =
+        "ยังไม่มีข้อมูลที่ pms5003/latest กรุณาเปิด ESP32";
+      $("sensorStatus").textContent = "รอข้อมูลจากเซนเซอร์";
+      status(false, "ยังไม่มีข้อมูล");
+      return;
+    }
+
+    const p1 = Number(data.pm1_0);
+    const p25 = Number(data.pm2_5);
+    const p10 = Number(data.pm10);
+    const ts = Number(data.timestamp);
+
+    if (![p1, p25, p10, ts].every(Number.isFinite)) {
+      $("message").textContent =
+        "รูปแบบข้อมูลไม่ถูกต้อง ต้องมี pm1_0, pm2_5, pm10 และ timestamp";
+      status(false, "ข้อมูลไม่ถูกต้อง");
+      return;
+    }
+
+    $("pm1").textContent = numberText(p1);
+    $("pm25").textContent = numberText(p25);
+    $("pm10").textContent = numberText(p10);
+    $("pm25Info").textContent = numberText(p25) + " µg/m³";
+    $("updated").textContent = thaiTime(ts);
+
+    latestDataTime = ts;
+    checkFreshness();
+
+    $("sensorStatus").textContent =
+      "ได้รับข้อมูลล่าสุดจากฐานข้อมูลแล้ว";
+  }
+
+  function showHistory(snapshot) {
+    const items = [];
+
+    snapshot.forEach(child => {
+      const d = child.val();
+
+      if (d && Number.isFinite(Number(d.timestamp)) &&
+          Number.isFinite(Number(d.pm1_0)) &&
+          Number.isFinite(Number(d.pm2_5)) &&
+          Number.isFinite(Number(d.pm10))) {
+        items.push(d);
+      }
+    });
+
+    items.sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+
+    chart.data.labels = items.map(d =>
+      new Date(Number(d.timestamp)).toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Bangkok"
+      })
+    );
+
+    chart.data.datasets[0].data = items.map(d => Number(d.pm1_0));
+    chart.data.datasets[1].data = items.map(d => Number(d.pm2_5));
+    chart.data.datasets[2].data = items.map(d => Number(d.pm10));
+    chart.update();
+  }
+
+  function checkFreshness() {
+    if (!latestDataTime) return;
+
+    const age = Date.now() - latestDataTime;
+
+    if (age > 120000 || age < -60000) {
+      status(false, "ข้อมูลไม่อัปเดต");
+      $("message").textContent =
+        "ข้อมูลล่าสุดเกิน 2 นาที หรือเวลาของอุปกรณ์ไม่ถูกต้อง กรุณาตรวจ ESP32 และ Wi-Fi";
+    } else {
+      status(true, "Firebase เชื่อมต่อแล้ว");
+      $("message").textContent =
+        "รับข้อมูลจาก Firebase สำเร็จ ระบบจะอัปเดตอัตโนมัติเมื่อ ESP32 ส่งข้อมูลใหม่";
+    }
+  }
+
+  function startFirebase() {
+    try {
+      if (firebase.apps.length) {
+        db = firebase.database();
+      } else {
+        if (firebaseConfig.apiKey.startsWith("ใส่_") ||
+            firebaseConfig.appId.startsWith("ใส่_")) {
+          throw new Error("กรุณาใส่ apiKey และ appId จาก Firebase Console");
+        }
+
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+      }
+
+      db.ref("pms5003/latest").on("value", snapshot => {
+        showLatest(snapshot.val());
+      }, error => {
+        status(false, "อ่านข้อมูลไม่ได้");
+        $("message").textContent =
+          "Firebase ปฏิเสธการอ่านข้อมูล: " + error.message +
+          " กรุณาตรวจสอบ Database Rules";
+      });
+
+      db.ref("pms5003/history")
+        .limitToLast(20)
+        .on("value", showHistory, error => {
+          $("message").textContent =
+            "อ่านประวัติไม่ได้: " + error.message;
+        });
+
+    } catch (error) {
+      status(false, "ตั้งค่าไม่ครบ");
+      $("message").textContent = error.message;
+    }
+  }
+
+  $("retry").addEventListener("click", () => {
+    if (db) {
+      db.ref("pms5003/latest").get().then(snapshot => {
+        showLatest(snapshot.val());
+      }).catch(error => {
+        status(false, "เชื่อมต่อไม่สำเร็จ");
+        $("message").textContent = error.message;
+      });
+    } else {
+      startFirebase();
+    }
+  });
+
+  makeChart();
+  startFirebase();
+  setInterval(checkFreshness, 5000);
+</script>
 </body>
 </html>
